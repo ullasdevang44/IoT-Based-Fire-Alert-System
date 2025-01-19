@@ -26,10 +26,6 @@ An **IoT-based fire detection and alert system** designed to detect fire hazards
    - Arduino IDE for ESP32 programming.
    - Firebase or any cloud platform for real-time monitoring.
 
----
-
-## Circuit Diagram
-![Circuit Diagram](diagrams/system_architecture.png)
 
 ---
 
