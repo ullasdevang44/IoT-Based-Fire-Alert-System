@@ -1,0 +1,96 @@
+#include <WiFi.h>
+#include <FirebaseESP32.h>
+#include <DHT.h>
+
+// Wi-Fi Credentials
+const char* ssid = "YourSSID";
+const char* password = "YourPassword";
+
+// Firebase Project Credentials
+#define FIREBASE_HOST "your-project-id.firebaseio.com" // Replace with your Firebase project URL
+#define FIREBASE_AUTH "your-firebase-database-secret" // Replace with your Firebase Database Secret
+
+// Firebase Object
+FirebaseData firebaseData;
+
+// DHT Sensor Configuration
+#define DHTPIN 4     // Pin connected to DHT sensor
+#define DHTTYPE DHT11 // DHT11 or DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
+// Smoke Sensor Configuration
+#define MQ2PIN 34    // Analog pin connected to MQ-2
+int smokeThreshold = 300; // Smoke detection threshold
+
+// Buzzer Configuration
+#define BUZZERPIN 26 // Pin connected to buzzer
+
+// Fire Detection Status
+bool fireDetected = false;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize sensors and buzzer
+  dht.begin();
+  pinMode(BUZZERPIN, OUTPUT);
+
+  // Connect to Wi-Fi
+  connectToWiFi();
+
+  // Initialize Firebase
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  Firebase.reconnectWiFi(true);
+}
+
+void loop() {
+  // Read sensor data
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+  int smokeLevel = analogRead(MQ2PIN);
+
+  // Check fire conditions
+  bool isFire = smokeLevel > smokeThreshold || temperature > 50;
+
+  // Update fire status if there's a change
+  if (isFire != fireDetected) {
+    fireDetected = isFire;
+    handleFireStatus(temperature, humidity, smokeLevel, isFire);
+  }
+
+  // Send periodic sensor data to Firebase
+  updateFirebaseData(temperature, humidity, smokeLevel);
+
+  // Short delay to improve responsiveness
+  delay(500);
+}
+
+void connectToWiFi() {
+  Serial.print("Connecting to Wi-Fi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWi-Fi connected!");
+}
+
+void handleFireStatus(float temp, float hum, int smoke, bool isFire) {
+  if (isFire) {
+    Serial.println("FIRE DETECTED! Activating alarm...");
+    digitalWrite(BUZZERPIN, HIGH); // Activate buzzer
+    Firebase.setString(firebaseData, "/FireAlert/Status", "Fire Detected!");
+  } else {
+    Serial.println("Fire cleared. System is safe.");
+    digitalWrite(BUZZERPIN, LOW); // Deactivate buzzer
+    Firebase.setString(firebaseData, "/FireAlert/Status", "Safe");
+  }
+}
+
+void updateFirebaseData(float temp, float hum, int smoke) {
+  Firebase.setFloat(firebaseData, "/FireAlert/Temperature", temp);
+  Firebase.setFloat(firebaseData, "/FireAlert/Humidity", hum);
+  Firebase.setInt(firebaseData, "/FireAlert/SmokeLevel", smoke);
+
+  Serial.printf("Updated Firebase: Temp=%.2f°C, Hum=%.2f%%, Smoke=%d\n", temp, hum, smoke);
+}
